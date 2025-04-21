@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>London Runner</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden; /* Prevent scrollbars */
+            background-color: #B0C4DE; /* Light Steel Blue - London Sky? */
+            font-family: 'Press Start 2P', cursive;
+            color: white;
+            text-shadow: 2px 2px #333; /* Darker shadow for better contrast */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 0;
+        }
+        .ui-overlay { /* Common styling for overlays */
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            padding: 20px;
+            border-radius: 10px;
+            z-index: 10;
+            background-color: rgba(0, 0, 0, 0.7);
+            border: 3px solid #555;
+        }
+        #start-screen {
+             font-size: 2em;
+        }
+        #start-screen h1 {
+             font-size: 1.5em;
+             margin-bottom: 20px;
+             color: #FFD700; /* Gold color for title */
+        }
+        #start-screen button, #game-over button {
+             font-family: 'Press Start 2P', cursive;
+             font-size: 0.6em;
+             padding: 15px 25px;
+             margin-top: 20px;
+             cursor: pointer;
+             color: white;
+             border-radius: 5px;
+             transition: all 0.1s ease;
+             text-transform: uppercase;
+        }
+        #start-screen button {
+             background-color: #DC143C; /* Crimson Red */
+             border: 2px solid #8B0000; /* Dark Red */
+             box-shadow: 3px 3px 0px #8B0000;
+        }
+         #start-screen button:hover {
+             background-color: #b01030;
+             box-shadow: 1px 1px 0px #8B0000;
+             transform: translate(2px, 2px);
+         }
+        #game-over {
+            background-color: rgba(100, 100, 100, 0.8); /* Grey game over */
+            border: 3px solid #333;
+            font-size: 3em;
+            display: none; /* Hidden by default */
+        }
+        #game-over button {
+             background-color: #4CAF50; /* Green */
+             border: 2px solid darkgreen;
+             box-shadow: 3px 3px 0px darkgreen;
+        }
+         #game-over button:hover {
+             background-color: #45a049;
+             box-shadow: 1px 1px 0px darkgreen;
+             transform: translate(2px, 2px);
+         }
+        #ui-container { /* Score display */
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 5px;
+            border: 2px solid #555;
+            z-index: 10;
+            display: none; /* Hidden initially */
+        }
+        #score {
+            font-size: 1.5em;
+        }
+         #instructions {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 1em;
+            text-align: center;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+             border: 2px solid #555;
+             z-index: 10;
+             display: none; /* Hidden initially */
+         }
+    </style>
+</head>
+<body>
+    <div id="start-screen" class="ui-overlay">
+        <h1>London Runner</h1>
+        <p style="font-size: 0.6em; margin-bottom: 20px;">Help the Queen dodge the buses!</p>
+        <button onclick="startGame()">Start Game</button>
+    </div>
+
+    <div id="ui-container">
+        <div id="score">Score: 0</div>
+    </div>
+    <div id="instructions">
+        Use Left/Right Arrows to Move
+    </div>
+
+    <div id="game-over" class="ui-overlay">
+        OH DEAR!<br>
+        <span id="final-score" style="font-size: 0.8em;">Final Score: 0</span><br>
+        <button onclick="restartGame()">Try Again</button>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        // --- Basic Setup ---
+        let scene, camera, renderer;
+        let playerModel, playerBody; // Player group and main body for collision
+        let obstacles = []; // Will store obstacle groups
+        let groundSegments = [];
+        let score = 0;
+        let gameSpeed = 0.1;
+        let speedIncrement = 0.0001;
+        let maxSpeed = 0.35;
+        let gameActive = false;
+        let animationFrameId = null;
+        let clock = new THREE.Clock();
+
+        // --- Player State ---
+        const lanes = [-1.8, 0, 1.8];
+        let currentLane = 1;
+        // Player dimensions
+        const playerBodySize = { width: 0.6, height: 1.2, depth: 0.5 }; // Main body (torso)
+        const playerHeadSize = { width: 0.4, height: 0.4, depth: 0.4 };
+        const crownSize = { width: 0.3, height: 0.2, depth: 0.3 };
+        // Calculate base Y so bottom of the body is near Y=0
+        const playerBaseY = playerBodySize.height / 2;
+
+        // --- DOM Elements ---
+        const scoreElement = document.getElementById('score');
+        const gameOverElement = document.getElementById('game-over');
+        const finalScoreElement = document.getElementById('final-score');
+        const instructionsElement = document.getElementById('instructions');
+        const startScreenElement = document.getElementById('start-screen');
+        const uiContainerElement = document.getElementById('ui-container');
+
+        // --- Initialization ---
+        function init() {
+            console.log("Initializing London scene...");
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xB0C4DE);
+            scene.fog = new THREE.Fog(0xB0C4DE, 15, 60);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            // Adjust camera Y based on the player model's approximate total height
+            const totalPlayerHeight = playerBodySize.height + playerHeadSize.height + crownSize.height;
+            camera.position.set(lanes[currentLane], totalPlayerHeight * 0.6 , 6); // Position camera relative to player height
+            camera.lookAt(lanes[currentLane], playerBaseY, 0); // Look towards base
+
+            const canvas = document.getElementById('gameCanvas');
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
+            directionalLight.position.set(-5, 10, 7);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 1024;
+            directionalLight.shadow.mapSize.height = 1024;
+            directionalLight.shadow.camera.near = 0.5;
+            directionalLight.shadow.camera.far = 50;
+            directionalLight.shadow.camera.left = -15;
+            directionalLight.shadow.camera.right = 15;
+            directionalLight.shadow.camera.top = 15;
+            directionalLight.shadow.camera.bottom = -15;
+            scene.add(directionalLight);
+
+            createPlayer();
+            createInitialGround();
+
+            window.addEventListener('resize', onWindowResize, false);
+            document.addEventListener('keydown', onKeyDown, false);
+
+            renderer.render(scene, camera);
+            console.log("Scene initialized and rendered statically.");
+        }
+
+        // --- Start Game Function ---
+        function startGame() {
+            console.log("Starting London Runner...");
+            startScreenElement.style.display = 'none';
+            gameOverElement.style.display = 'none';
+            uiContainerElement.style.display = 'block';
+            instructionsElement.style.display = 'block';
+            resetGameState();
+            gameActive = true;
+            clock.start();
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            animate();
+        }
+
+        // --- Reset Game State ---
+        function resetGameState() {
+             console.log("Resetting game state...");
+             obstacles.forEach(obstacleGroup => scene.remove(obstacleGroup)); // Remove groups
+             obstacles = [];
+             groundSegments.forEach(segment => scene.remove(segment));
+             groundSegments = [];
+             createInitialGround();
+             currentLane = 1;
+             if (playerModel) { // Use playerModel (the group) for positioning
+                 playerModel.position.set(lanes[currentLane], 0, 0); // Position group at base
+             } else {
+                 createPlayer();
+             }
+             // Recalculate camera position based on player height
+             const totalPlayerHeight = playerBodySize.height + playerHeadSize.height + crownSize.height;
+             camera.position.set(lanes[currentLane], totalPlayerHeight * 0.6, 6);
+             camera.lookAt(lanes[currentLane], playerBaseY, 0); // Look towards base
+             score = 0;
+             gameSpeed = 0.1;
+             timeSinceLastSpawn = 0;
+             scoreElement.textContent = `Score: ${score}`;
+             clock.stop();
+        }
+
+        // --- Player Creation (Compound Shape) ---
+        function createPlayer() {
+            playerModel = new THREE.Group(); // Create a group for the player parts
+
+            // Main Body (Light Blue Box)
+            const bodyGeometry = new THREE.BoxGeometry(playerBodySize.width, playerBodySize.height, playerBodySize.depth);
+            const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xADD8E6 }); // Light Blue
+            playerBody = new THREE.Mesh(bodyGeometry, bodyMaterial); // Store main body separately for collision
+            playerBody.position.y = playerBaseY; // Position body so its bottom is at y=0 relative to group
+            playerBody.castShadow = true;
+            playerModel.add(playerBody); // Add body to the group
+
+            // Head (Peach Box)
+            const headGeometry = new THREE.BoxGeometry(playerHeadSize.width, playerHeadSize.height, playerHeadSize.depth);
+            const headMaterial = new THREE.MeshStandardMaterial({ color: 0xFFE0BD }); // Peach/Skin tone
+            const head = new THREE.Mesh(headGeometry, headMaterial);
+            // Position head on top of the body
+            head.position.y = playerBodySize.height + playerHeadSize.height / 2;
+            head.castShadow = true;
+            playerModel.add(head); // Add head to the group
+
+            // Crown (Yellow Box)
+            const crownGeometry = new THREE.BoxGeometry(crownSize.width, crownSize.height, crownSize.depth);
+            const crownMaterial = new THREE.MeshStandardMaterial({ color: 0xFFD700 }); // Gold/Yellow
+            const crown = new THREE.Mesh(crownGeometry, crownMaterial);
+            // Position crown on top of the head
+            crown.position.y = playerBodySize.height + playerHeadSize.height + crownSize.height / 2;
+            crown.castShadow = false;
+            playerModel.add(crown); // Add crown to the group
+
+            // Bounding box for collision - use the main player body's box
+            playerBody.userData.boundingBox = new THREE.Box3();
+            // We need to update the box based on the WORLD position of the body,
+            // so we do this in the update loop after the group has moved.
+
+            // Position the entire player group
+            playerModel.position.set(lanes[currentLane], 0, 0); // Group's base at world y=0
+            scene.add(playerModel);
+        }
+
+
+        // --- Ground Creation (Street) ---
+        const groundSegmentLength = 25;
+        const groundWidth = 10;
+        const numberOfSegments = 5;
+
+        function createGroundSegment(zPos) {
+            // Road Surface
+            const groundGeometry = new THREE.PlaneGeometry(groundWidth, groundSegmentLength);
+            const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x444444, side: THREE.DoubleSide });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            ground.position.set(0, 0, zPos);
+            ground.receiveShadow = true;
+            scene.add(ground);
+            groundSegments.push(ground);
+
+            // Pavements
+            const pavementHeight = 0.1;
+            const pavementWidth = 1;
+            const pavementGeometry = new THREE.BoxGeometry(pavementWidth, pavementHeight, groundSegmentLength);
+            const pavementMaterial = new THREE.MeshStandardMaterial({ color: 0xAAAAAA });
+
+            const leftPavement = new THREE.Mesh(pavementGeometry, pavementMaterial);
+            leftPavement.position.set(-(groundWidth/2 + pavementWidth/2), pavementHeight/2, zPos);
+            leftPavement.receiveShadow = true;
+            scene.add(leftPavement);
+            groundSegments.push(leftPavement);
+
+            const rightPavement = new THREE.Mesh(pavementGeometry, pavementMaterial);
+            rightPavement.position.set(groundWidth/2 + pavementWidth/2, pavementHeight/2, zPos);
+            rightPavement.receiveShadow = true;
+            scene.add(rightPavement);
+            groundSegments.push(rightPavement);
+        }
+
+        function createInitialGround() {
+            for (let i = 0; i < numberOfSegments; i++) {
+                createGroundSegment(0 - i * groundSegmentLength);
+            }
+        }
+
+        // --- Obstacle Creation (Buses - Compound Shape) ---
+        const obstacleSpawnZ = -50;
+        const obstacleSpawnRate = 2.0;
+        let timeSinceLastSpawn = 0;
+        // Define bus properties
+        const busBodySize = { width: 1.4, height: 2.8, depth: 4.0 };
+        const busWheelSize = { radius: 0.3, height: 0.2 };
+        const busColor = 0xCC0000; // Red
+        const wheelColor = 0x111111; // Dark grey/black
+        const windowColor = 0xAAAAFF; // Light blueish grey
+
+        function createObstacle() {
+            const busModel = new THREE.Group(); // Group for bus parts
+
+            // Bus Body
+            const bodyGeometry = new THREE.BoxGeometry(busBodySize.width, busBodySize.height, busBodySize.depth);
+            const bodyMaterial = new THREE.MeshStandardMaterial({ color: busColor });
+            const busBody = new THREE.Mesh(bodyGeometry, bodyMaterial); // Store main body for collision box
+            busBody.castShadow = true;
+            busBody.receiveShadow = true;
+            busModel.add(busBody); // Add main body to group first
+
+            // Wheels (Cylinders)
+            const wheelGeometry = new THREE.CylinderGeometry(busWheelSize.radius, busWheelSize.radius, busWheelSize.height, 16);
+            const wheelMaterial = new THREE.MeshStandardMaterial({ color: wheelColor });
+
+            const wheelPositions = [
+                // Front wheels
+                { x: -busBodySize.width / 2, y: -busBodySize.height / 2 + busWheelSize.radius, z: busBodySize.depth / 2 * 0.7 },
+                { x: busBodySize.width / 2, y: -busBodySize.height / 2 + busWheelSize.radius, z: busBodySize.depth / 2 * 0.7 },
+                // Rear wheels
+                { x: -busBodySize.width / 2, y: -busBodySize.height / 2 + busWheelSize.radius, z: -busBodySize.depth / 2 * 0.7 },
+                { x: busBodySize.width / 2, y: -busBodySize.height / 2 + busWheelSize.radius, z: -busBodySize.depth / 2 * 0.7 }
+            ];
+
+            wheelPositions.forEach(pos => {
+                const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                wheel.rotation.z = Math.PI / 2; // Rotate cylinder to lie flat
+                wheel.position.set(pos.x, pos.y, pos.z);
+                wheel.castShadow = true;
+                busModel.add(wheel);
+            });
+
+            // Windows (simple inset boxes) - Optional detail
+            const windowHeight = busBodySize.height * 0.4;
+            const windowDepth = busBodySize.depth * 0.8;
+            const windowWidth = 0.05; // Thin inset
+            const windowGeometry = new THREE.BoxGeometry(windowWidth, windowHeight, windowDepth);
+            const windowMaterial = new THREE.MeshStandardMaterial({ color: windowColor, transparent: true, opacity: 0.7 });
+
+            const leftWindow = new THREE.Mesh(windowGeometry, windowMaterial);
+            leftWindow.position.set(-busBodySize.width / 2 - windowWidth/2 + 0.01, busBodySize.height * 0.1, 0); // Position slightly outside
+            busModel.add(leftWindow);
+
+            const rightWindow = new THREE.Mesh(windowGeometry, windowMaterial);
+            rightWindow.position.set(busBodySize.width / 2 + windowWidth/2 - 0.01, busBodySize.height * 0.1, 0); // Position slightly outside
+            busModel.add(rightWindow);
+
+
+            // Randomly choose a lane
+            const laneIndex = Math.floor(Math.random() * lanes.length);
+
+            // Position the bus group on the ground in the chosen lane
+            // Group's origin is at the center of the bus body
+            busModel.position.set(lanes[laneIndex], busBodySize.height / 2, obstacleSpawnZ);
+
+            // Add bounding box for collision - using the main body mesh
+            busBody.userData.boundingBox = new THREE.Box3();
+            // We need to update the box based on the WORLD position of the body,
+            // so we do this in the update loop after the group has moved.
+            busModel.userData.collisionBoxMesh = busBody; // Reference to the mesh used for collision box
+
+            busModel.userData.type = 'bus'; // Store type on the group
+            console.log(`Created bus model at lane ${laneIndex}`);
+
+            scene.add(busModel);
+            obstacles.push(busModel); // Store the group
+        }
+
+
+        // --- Game Logic ---
+        function updateGame(deltaTime) {
+            gameSpeed = Math.min(maxSpeed, gameSpeed + speedIncrement * deltaTime);
+            const moveDistance = gameSpeed;
+
+            // Move ground
+            groundSegments.forEach(segment => { segment.position.z += moveDistance; });
+
+            // Move obstacles (groups)
+            obstacles.forEach(obstacleGroup => {
+                obstacleGroup.position.z += moveDistance;
+                // Update collision box for the designated mesh within the group
+                const collisionMesh = obstacleGroup.userData.collisionBoxMesh;
+                if (collisionMesh) {
+                     collisionMesh.updateMatrixWorld(); // Ensure world matrix is updated
+                     collisionMesh.userData.boundingBox.setFromObject(collisionMesh);
+                }
+            });
+
+            // Manage ground segments
+            const roadSegments = groundSegments.filter(seg => seg.geometry.type === 'PlaneGeometry');
+            if (roadSegments[0] && roadSegments[0].position.z > groundSegmentLength) {
+                 const zToShift = roadSegments[0].position.z; // Get the Z before potential removal
+                 const segmentsToRemove = groundSegments.filter(seg => Math.abs(seg.position.z - zToShift) < moveDistance * 2); // Find segments around this Z
+
+                 segmentsToRemove.forEach(seg => {
+                     scene.remove(seg);
+                     const index = groundSegments.indexOf(seg);
+                     if (index > -1) groundSegments.splice(index, 1);
+                 });
+
+                const lastRoadSegment = groundSegments.filter(seg => seg.geometry.type === 'PlaneGeometry').pop();
+                const nextZ = lastRoadSegment ? lastRoadSegment.position.z - groundSegmentLength : 0 - (numberOfSegments -1) * groundSegmentLength;
+                createGroundSegment(nextZ);
+            }
+
+            // Manage obstacles (removal)
+            obstacles = obstacles.filter(obstacleGroup => {
+                if (obstacleGroup.position.z > camera.position.z + 10) { // Remove if further behind
+                    scene.remove(obstacleGroup);
+                    return false;
+                }
+                return true;
+            });
+
+            // Manage obstacles (spawning)
+            timeSinceLastSpawn += deltaTime;
+            if (timeSinceLastSpawn > obstacleSpawnRate / (gameSpeed / 0.1)) {
+                 const lastObstacle = obstacles[obstacles.length - 1];
+                 const minGap = 15 + (gameSpeed * 20);
+                 if (!lastObstacle || lastObstacle.position.z < obstacleSpawnZ + minGap) {
+                    createObstacle();
+                    timeSinceLastSpawn = 0;
+                 }
+            }
+
+            // Update player bounding box (based on playerBody's world position)
+            if (playerBody) {
+                 playerBody.updateMatrixWorld(); // Update world matrix of the body part
+                 playerBody.userData.boundingBox.setFromObject(playerBody);
+            }
+
+            // Collision Detection
+            checkCollisions();
+
+            // Update Score
+            score = Math.floor(clock.getElapsedTime() * 10);
+            scoreElement.textContent = `Score: ${score}`;
+
+            // Smooth camera follow (follow the playerModel group)
+            if (playerModel) {
+                const targetCameraX = lanes[currentLane];
+                const totalPlayerHeight = playerBodySize.height + playerHeadSize.height + crownSize.height;
+                const targetCameraY = totalPlayerHeight * 0.6; // Relative to player height
+                const targetCameraZ = playerModel.position.z + 6; // Follow group's Z
+
+                camera.position.x += (targetCameraX - camera.position.x) * 0.1;
+                camera.position.y += (targetCameraY - camera.position.y) * 0.1;
+                camera.position.z += (targetCameraZ - camera.position.z) * 0.1;
+
+                const lookAtPos = new THREE.Vector3(lanes[currentLane], playerBaseY, playerModel.position.z - 10);
+                camera.lookAt(lookAtPos);
+            }
+        }
+
+        function checkCollisions() {
+            // Use playerBody's bounding box
+            if (!playerBody || !playerBody.userData.boundingBox) return;
+            const playerBox = playerBody.userData.boundingBox;
+
+            for (let i = 0; i < obstacles.length; i++) {
+                const obstacleGroup = obstacles[i];
+                const collisionMesh = obstacleGroup.userData.collisionBoxMesh; // Get the mesh used for collision
+                 if (!collisionMesh || !collisionMesh.userData.boundingBox) continue;
+
+                const obstacleBox = collisionMesh.userData.boundingBox;
+                if (playerBox.intersectsBox(obstacleBox)) {
+                    console.log("Collision detected with bus!");
+                    gameOver();
+                    break;
+                }
+            }
+        }
+
+        function gameOver() {
+            console.log("Game Over!");
+            gameActive = false;
+            clock.stop();
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            animationFrameId = null;
+            finalScoreElement.textContent = `Final Score: ${score}`;
+            gameOverElement.style.display = 'block';
+            uiContainerElement.style.display = 'none';
+            instructionsElement.style.display = 'none';
+        }
+
+        function restartGame() {
+            console.log("Restarting game...");
+            gameOverElement.style.display = 'none';
+            // Remove the old player model before resetting state
+            if (playerModel) scene.remove(playerModel);
+            playerModel = null; // Clear reference
+            playerBody = null; // Clear reference
+            startGame(); // Reset state (which creates player) and start game again
+        }
+
+        // --- Event Handlers ---
+        function onWindowResize() {
+            if (!camera || !renderer) return;
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+             if (!gameActive) {
+                renderer.render(scene, camera);
+             }
+        }
+
+        function onKeyDown(event) {
+            if (!gameActive) return;
+
+            let targetLane = currentLane;
+            switch (event.key) {
+                case 'ArrowLeft':
+                case 'a':
+                    if (currentLane > 0) targetLane = currentLane - 1;
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                    if (currentLane < lanes.length - 1) targetLane = currentLane + 1;
+                    break;
+            }
+
+            if (targetLane !== currentLane) {
+                 currentLane = targetLane;
+                 movePlayerLane();
+            }
+        }
+
+        function movePlayerLane() {
+             // Move the entire player group
+             if(playerModel) {
+                playerModel.position.x = lanes[currentLane];
+             }
+        }
+
+        // --- Animation Loop ---
+        function animate() {
+            animationFrameId = requestAnimationFrame(animate);
+            const deltaTime = clock.getDelta();
+            if (gameActive) {
+                updateGame(deltaTime);
+            }
+            if (renderer && scene && camera) {
+                 renderer.render(scene, camera);
+            }
+        }
+
+        // --- Start ---
+        if (typeof THREE === 'undefined') {
+            console.error("Three.js library not found!");
+            alert("Error: Could not load 3D library. Please check the console.");
+        } else {
+             window.onload = init;
+        }
+
+    </script>
+</body>
+</html>

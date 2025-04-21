@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Anja’s Travel Blog</title>
+  <link rel="stylesheet" href="travel.css">
+</head>
+<body>
+
+  <!-- Anchor for back-to-top link -->
+  <a id="top"></a>
+
+  <!-- Header with background image -->
+  <div class="hero-banner">
+    <div class="hero-text">
+      <h1>Anja's Travel Blog</h1>
+      <p>My European Adventures</p>
+    </div>
+  </div>
+
+  <!-- Link back to home page -->
+  <div class="nav-link">
+    <a href="index.html">Back to Home</a>
+  </div>
+
+  <!-- Featured trip section -->
+  <div class="featured-trip">
+    <h2>My Study Abroad in London</h2>
+    <img src="IMG_9182.JPG" alt="London trip photo" class="trip-image">
+    <p>I lived in London for 4 months and explored museums, markets, and parks. It was magical!</p>
+  </div>
+
+  <!-- YouTube video embed -->
+  <div class="youtube-video">
+    <h3>Watch this before you go!</h3>
+    <iframe width="560" height="315" src="https://www.youtube.com/embed/vpCYaDgX65w?si=gGWIxWRFHO0zVwGw" 
+    title="YouTube video player" frameborder="0" allowfullscreen></iframe>
+  </div>
+
+  <!-- Travel tips list -->
+  <div class="travel-tips">
+    <h3>🌟 Top 3 Travel Tips</h3>
+    <ol>
+      <li>Pack light
+        <ul>
+          <li>Only bring essentials</li>
+          <li>Use packing cubes</li>
+        </ul>
+      </li>
+      <li>Try local food</li>
+      <li>Talk to locals</li>
+    </ol>
+  </div>
+
+  <!-- Tableau graph embed -->
+  <div class="tableau">
+    <h3>Understanding UK Weather</h3>
+    <!-- Replace with your actual Tableau embed link -->
+    <div class='tableauPlaceholder' id='viz1745200125093' style='position: relative'><noscript><a href='#'><img alt='UK Weather Trends by Region ' src='https:&#47;&#47;public.tableau.com&#47;static&#47;images&#47;UK&#47;UKWeatherStations&#47;UKWeatherTrendsbyRegion&#47;1_rss.png' style='border: none' /></a></noscript><object class='tableauViz'  style='display:none;'><param name='host_url' value='https%3A%2F%2Fpublic.tableau.com%2F' /> <param name='embed_code_version' value='3' /> <param name='site_root' value='' /><param name='name' value='UKWeatherStations&#47;UKWeatherTrendsbyRegion' /><param name='tabs' value='no' /><param name='toolbar' value='yes' /><param name='static_image' value='https:&#47;&#47;public.tableau.com&#47;static&#47;images&#47;UK&#47;UKWeatherStations&#47;UKWeatherTrendsbyRegion&#47;1.png' /> <param name='animate_transition' value='yes' /><param name='display_static_image' value='yes' /><param name='display_spinner' value='yes' /><param name='display_overlay' value='yes' /><param name='display_count' value='yes' /><param name='language' value='en-US' /></object></div>                <script type='text/javascript'>                    var divElement = document.getElementById('viz1745200125093');                    var vizElement = divElement.getElementsByTagName('object')[0];                    vizElement.style.width='650px';vizElement.style.height='987px';                    var scriptElement = document.createElement('script');                    scriptElement.src = 'https://public.tableau.com/javascripts/api/viz_v1.js';                    vizElement.parentNode.insertBefore(scriptElement, vizElement);                </script>
+    <!-- <iframe src="https://public.tableau.com/views/UKWeatherStations/UKWeatherTrendsbyRegion?:language=en-US&:sid=&:redirect=auth&:display_count=n&:origin=viz_share_link" width="800" height="600"></iframe> -->
+  </div>
+
+
+  <div class="game-section">
+    <h3>Play My Runner Game!</h3>
+    <a class="game-link" href="game.html" target="_blank">Play Runner Game</a>
+  </div>
+ 
+  <div class="photo-gallery">
+    <h3>Travel Photo Gallery</h3>
+    <div class="gallery-grid">
+      <img src="IMG_3991.JPG" alt="Big Ben" onclick="openLightbox(this)">
+      <img src="IMG_4582.JPG" alt="Bath, England" onclick="openLightbox(this)">
+      <img src="IMG_5572.JPG" alt="Beachy Head" onclick="openLightbox(this)">
+     
+    </div>
+  </div>
+  <div id="lightbox" class="lightbox" onclick="closeLightbox()">
+    <img id="lightbox-img" src="">
+  </div>
+  <p class="back-to-top"><a href="#top">Back to Top</a></p>
+  <script>
+    function openLightbox(imgElement) {
+      const lightbox = document.getElementById('lightbox');
+      const lightboxImg = document.getElementById('lightbox-img');
+      lightboxImg.src = imgElement.src;
+      lightbox.style.display = 'flex';
+    }
+  
+    function closeLightbox() {
+      document.getElementById('lightbox').style.display = 'none';
+    }
+  </script>
+</body>
+</html>
